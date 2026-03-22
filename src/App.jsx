@@ -1,4 +1,3 @@
-import { seedItems } from './seed'
 import { useState, useEffect, useRef } from 'react'
 import { db } from './firebase'
 import { ref, onValue, set, update } from 'firebase/database'
@@ -87,15 +86,15 @@ export default function App() {
   const [editingId, setEditingId] = useState(null)
   const [draftText, setDraftText] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [items, setItems] = useState([])
   const [activeFilter, setActiveFilter] = useState('all')
   const [view, setView] = useState('main') // 'main' | 'archived'
   const textareaRef = useRef(null)
 
-
-  // dentro del componente, ANTES del useEffect:
-  useEffect(() => {
-    seedItems()
-  }, [])
+  onValue(ref(db, 'items'), s => {
+    const data = s.val() || {}
+    setItems(Object.values(data))
+  })
 
   useEffect(() => {
     const unsub1 = onValue(ref(db, 'pendientes/checked'), s => setChecked(s.val() || {}))
@@ -104,8 +103,13 @@ export default function App() {
       setArchived(s.val() || {})
       setLoaded(true)
     })
-    return () => { unsub1(); unsub2(); unsub3() }
+    const unsub4 = onValue(ref(db, 'items'), s => {
+      const data = s.val() || {}
+      setItems(Object.values(data))
+    })
+    return () => { unsub1(); unsub2(); unsub3(); unsub4() }
   }, [])
+
 
   const toggleCheck = async (id, e) => {
     e.stopPropagation()
