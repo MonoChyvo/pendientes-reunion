@@ -91,22 +91,31 @@ export default function App() {
   const [view, setView] = useState('main') // 'main' | 'archived'
   const textareaRef = useRef(null)
 
-  onValue(ref(db, 'items'), s => {
-    const data = s.val() || {}
-    setItems(Object.values(data))
-  })
-
   useEffect(() => {
-    const unsub1 = onValue(ref(db, 'pendientes/checked'), s => setChecked(s.val() || {}))
-    const unsub2 = onValue(ref(db, 'pendientes/comments'), s => setComments(s.val() || {}))
+    let loadCount = 0
+    const checkLoaded = () => {
+      loadCount++
+      if (loadCount >= 4) setLoaded(true)
+    }
+
+    const unsub1 = onValue(ref(db, 'pendientes/checked'), s => {
+      setChecked(s.val() || {})
+      checkLoaded()
+    })
+    const unsub2 = onValue(ref(db, 'pendientes/comments'), s => {
+      setComments(s.val() || {})
+      checkLoaded()
+    })
     const unsub3 = onValue(ref(db, 'pendientes/archived'), s => {
       setArchived(s.val() || {})
-      setLoaded(true)
+      checkLoaded()
     })
     const unsub4 = onValue(ref(db, 'items'), s => {
       const data = s.val() || {}
       setItems(Object.values(data))
+      checkLoaded()
     })
+
     return () => { unsub1(); unsub2(); unsub3(); unsub4() }
   }, [])
 
