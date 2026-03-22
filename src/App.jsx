@@ -1,3 +1,4 @@
+import { seedItems } from './seed'
 import { useState, useEffect, useRef } from 'react'
 import { db } from './firebase'
 import { ref, onValue, set, update } from 'firebase/database'
@@ -89,6 +90,12 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [view, setView] = useState('main') // 'main' | 'archived'
   const textareaRef = useRef(null)
+
+
+  // dentro del componente, ANTES del useEffect:
+  useEffect(() => {
+    seedItems()
+  }, [])
 
   useEffect(() => {
     const unsub1 = onValue(ref(db, 'pendientes/checked'), s => setChecked(s.val() || {}))
@@ -258,7 +265,7 @@ export default function App() {
                         {/* Checkbox */}
                         <div className="check-circle" onClick={(e) => toggleCheck(item.id, e)}>
                           <svg className="check-svg" width="10" height="8" viewBox="0 0 10 8" fill="none">
-                            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                           </svg>
                         </div>
                         {/* Text */}
@@ -274,12 +281,12 @@ export default function App() {
                         <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
                           <button className="icon-btn" title="Archivar" onClick={(e) => archiveItem(item.id, e)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>
+                              <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
                             </svg>
                           </button>
                           <button className="icon-btn" title="Notas" onClick={(e) => { toggleExpand(item.id); startEdit(item.id, e) }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                             </svg>
                           </button>
                           <span style={{ fontSize: 12, color: '#3A3A40', alignSelf: 'center', marginLeft: 2 }}>{expanded[item.id] ? '▲' : '▼'}</span>
