@@ -89,6 +89,10 @@ export default function App() {
   const [items, setItems] = useState([])
   const [activeFilter, setActiveFilter] = useState('all')
   const [view, setView] = useState('main') // 'main' | 'archived'
+  const [showForm, setShowForm] = useState(false)
+  const [newText, setNewText] = useState('')
+  const [newSection, setNewSection] = useState('operaciones')
+  const [newUrgent, setNewUrgent] = useState(false)
   const textareaRef = useRef(null)
 
   useEffect(() => {
@@ -172,11 +176,29 @@ export default function App() {
     await set(ref(db, 'pendientes/checked'), {})
   }
 
-  const activeItems = ALL_IDS.filter(id => !archived[id])
+  const createItem = async () => {
+    if (!newText.trim()) return
+    const id = 'item_' + Date.now()
+    const item = {
+      id,
+      text: newText.trim(),
+      note: '',
+      section: newSection,
+      urgent: newUrgent,
+      createdAt: Date.now()
+    }
+    await set(ref(db, `items/${id}`), item)
+    setNewText('')
+    setNewSection('operaciones')
+    setNewUrgent(false)
+    setShowForm(false)
+  }
+
+  const activeItems = items.filter(i => !archived[i.id])
   const total = activeItems.length
-  const done = activeItems.filter(id => checked[id]).length
+  const done = activeItems.filter(i => checked[i.id]).length
   const pct = Math.round((done / total) * 100) || 0
-  const archivedItems = ALL_ITEMS.filter(i => archived[i.id])
+  const archivedItems = items.filter(i => archived[i.id])
 
   if (!loaded) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0C0C0E' }}>
@@ -245,6 +267,41 @@ export default function App() {
               <button className={`pill-btn ${activeFilter === 'urgent' ? 'active' : ''}`} onClick={() => setActiveFilter('urgent')}>⚡ Urgentes</button>
               <button className={`pill-btn ${activeFilter === 'pending' ? 'active' : ''}`} onClick={() => setActiveFilter('pending')}>Pendientes</button>
               <div style={{ flex: 1 }} />
+              <button className="pill-btn save" onClick={() => setShowForm(v => !v)}>+ Nuevo</button>
+              {showForm && (
+                <div style={{ background: '#141418', borderBottom: '1px solid #1E1E24', padding: '16px 24px' }}>
+                  <div style={{ maxWidth: 640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <input
+                      autoFocus
+                      value={newText}
+                      onChange={e => setNewText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && createItem()}
+                      placeholder="Nombre del pendiente..."
+                      style={{ background: '#0C0C0E', border: '1px solid #2A2A2E', borderRadius: 8, color: '#D0D0D8', fontSize: 13, fontFamily: 'inherit', padding: '10px 12px', outline: 'none' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <select
+                        value={newSection}
+                        onChange={e => setNewSection(e.target.value)}
+                        style={{ background: '#0C0C0E', border: '1px solid #2A2A2E', borderRadius: 8, color: '#D0D0D8', fontSize: 12, fontFamily: 'inherit', padding: '6px 10px', outline: 'none' }}
+                      >
+                        <option value="operaciones">Operaciones</option>
+                        <option value="finanzas">Finanzas / Fiscal</option>
+                        <option value="tecnologia">Tecnología</option>
+                        <option value="marketing">Marketing</option>
+                        <option value="insumos">Insumos / Equipo</option>
+                      </select>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6B6B75', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={newUrgent} onChange={e => setNewUrgent(e.target.checked)} />
+                        Urgente
+                      </label>
+                      <div style={{ flex: 1 }} />
+                      <button className="pill-btn save" onClick={createItem}>Crear</button>
+                      <button className="pill-btn" onClick={() => setShowForm(false)}>Cancelar</button>
+                    </div>
+                  </div>
+                </div>
+              )}
               <button className="pill-btn danger" onClick={resetAll}>Reiniciar</button>
             </div>
           )}
@@ -254,95 +311,112 @@ export default function App() {
       {/* Main view */}
       {view === 'main' && (
         <div style={{ ...S.inner, padding: '16px 16px 40px' }}>
-          {Object.entries(INITIAL_ITEMS).map(([key, section]) => {
-            let items = section.items.filter(i => !archived[i.id])
-            if (activeFilter === 'urgent') items = items.filter(i => i.urgent)
-            if (activeFilter === 'pending') items = items.filter(i => !checked[i.id])
-            if (items.length === 0) return null
+          {(() => {
+            const SECTION_META = {
+              operaciones: { label: 'Operaciones', color: '#FCD34D', bg: 'rgba(252,211,77,0.12)' },
+              finanzas: { label: 'Finanzas / Fiscal', color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
+              tecnologia: { label: 'Tecnología', color: '#60A5FA', bg: 'rgba(96,165,250,0.12)' },
+              marketing: { label: 'Marketing', color: '#C084FC', bg: 'rgba(192,132,252,0.12)' },
+              insumos: { label: 'Insumos / Equipo', color: '#2DD4BF', bg: 'rgba(45,212,191,0.12)' },
+            }
 
-            const secDone = section.items.filter(i => checked[i.id] && !archived[i.id]).length
-            const secTotal = section.items.filter(i => !archived[i.id]).length
+            const grouped = items.reduce((acc, item) => {
+              if (!acc[item.section]) acc[item.section] = []
+              acc[item.section].push(item)
+              return acc
+            }, {})
 
-            return (
-              <div key={key} className="section-card">
-                <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid #1E1E24', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: section.bg, color: section.color, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                    {section.label}
-                  </span>
-                  <span style={{ fontSize: 12, color: '#3A3A40' }}>{secDone}/{secTotal}</span>
-                </div>
-                <div style={{ padding: '4px 0' }}>
-                  {items.map(item => (
-                    <div key={item.id}>
-                      <div className={`item-row ${checked[item.id] ? 'done' : ''}`} onClick={() => toggleExpand(item.id)}>
-                        {/* Checkbox */}
-                        <div className="check-circle" onClick={(e) => toggleCheck(item.id, e)}>
-                          <svg className="check-svg" width="10" height="8" viewBox="0 0 10 8" fill="none">
-                            <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </div>
-                        {/* Text */}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <span className="item-text" style={{ fontSize: 13, fontWeight: 500, color: '#D0D0D8', lineHeight: 1.4 }}>{item.text}</span>
-                            {item.urgent && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.15)', color: '#F87171', fontWeight: 600 }}>URGENTE</span>}
-                            {comments[item.id] && <span style={{ fontSize: 10, color: '#4A4A52' }}>💬</span>}
+            return Object.entries(grouped).map(([sectionKey, sectionItems]) => {
+              const meta = SECTION_META[sectionKey] || { label: sectionKey, color: '#9090A0', bg: 'rgba(144,144,160,0.12)' }
+
+              let visibleItems = sectionItems.filter(i => !archived[i.id])
+              if (activeFilter === 'urgent') visibleItems = visibleItems.filter(i => i.urgent)
+              if (activeFilter === 'pending') visibleItems = visibleItems.filter(i => !checked[i.id])
+              if (visibleItems.length === 0) return null
+
+              const secDone = sectionItems.filter(i => checked[i.id] && !archived[i.id]).length
+              const secTotal = sectionItems.filter(i => !archived[i.id]).length
+
+              return (
+                <div key={sectionKey} className="section-card">
+                  <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid #1E1E24', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                      {meta.label}
+                    </span>
+                    <span style={{ fontSize: 12, color: '#3A3A40' }}>{secDone}/{secTotal}</span>
+                  </div>
+                  <div style={{ padding: '4px 0' }}>
+                    {visibleItems.map(item => (
+                      <div key={item.id}>
+                        <div className={`item-row ${checked[item.id] ? 'done' : ''}`} onClick={() => toggleExpand(item.id)}>
+                          <div className="check-circle" onClick={(e) => toggleCheck(item.id, e)}>
+                            <svg className="check-svg" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                              <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                           </div>
-                          {item.note && <p style={{ fontSize: 12, color: '#4A4A52', marginTop: 2, lineHeight: 1.4 }}>{item.note}</p>}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span className="item-text" style={{ fontSize: 13, fontWeight: 500, color: '#D0D0D8', lineHeight: 1.4 }}>{item.text}</span>
+                              {item.urgent && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.15)', color: '#F87171', fontWeight: 600 }}>URGENTE</span>}
+                              {comments[item.id] && <span style={{ fontSize: 10, color: '#4A4A52' }}>💬</span>}
+                            </div>
+                            {item.note && <p style={{ fontSize: 12, color: '#4A4A52', marginTop: 2, lineHeight: 1.4 }}>{item.note}</p>}
+                            <p style={{ fontSize: 11, color: '#3A3A40', marginTop: 3 }}>
+                              {new Date(item.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                            <button className="icon-btn" title="Archivar" onClick={(e) => archiveItem(item.id, e)}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                              </svg>
+                            </button>
+                            <button className="icon-btn" title="Notas" onClick={(e) => { toggleExpand(item.id); startEdit(item.id, e) }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                              </svg>
+                            </button>
+                            <span style={{ fontSize: 12, color: '#3A3A40', alignSelf: 'center', marginLeft: 2 }}>{expanded[item.id] ? '▲' : '▼'}</span>
+                          </div>
                         </div>
-                        {/* Actions */}
-                        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                          <button className="icon-btn" title="Archivar" onClick={(e) => archiveItem(item.id, e)}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
-                            </svg>
-                          </button>
-                          <button className="icon-btn" title="Notas" onClick={(e) => { toggleExpand(item.id); startEdit(item.id, e) }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                          </button>
-                          <span style={{ fontSize: 12, color: '#3A3A40', alignSelf: 'center', marginLeft: 2 }}>{expanded[item.id] ? '▲' : '▼'}</span>
-                        </div>
-                      </div>
 
-                      {/* Expand panel */}
-                      {expanded[item.id] && (
-                        <div className="expand-panel">
-                          {editingId === item.id ? (
-                            <div>
-                              <textarea
-                                ref={textareaRef}
-                                className="comment-box"
-                                value={draftText}
-                                onChange={e => setDraftText(e.target.value)}
-                                placeholder="Agrega notas, acuerdos, contexto..."
-                                rows={3}
-                              />
-                              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                <button className="pill-btn save" onClick={() => saveComment(item.id)}>Guardar</button>
-                                <button className="pill-btn" onClick={() => setEditingId(null)}>Cancelar</button>
+                        {expanded[item.id] && (
+                          <div className="expand-panel">
+                            {editingId === item.id ? (
+                              <div>
+                                <textarea
+                                  ref={textareaRef}
+                                  className="comment-box"
+                                  value={draftText}
+                                  onChange={e => setDraftText(e.target.value)}
+                                  placeholder="Agrega notas, acuerdos, contexto..."
+                                  rows={3}
+                                />
+                                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                  <button className="pill-btn save" onClick={() => saveComment(item.id)}>Guardar</button>
+                                  <button className="pill-btn" onClick={() => setEditingId(null)}>Cancelar</button>
+                                </div>
                               </div>
-                            </div>
-                          ) : (
-                            <div>
-                              {comments[item.id]
-                                ? <div className="comment-text">{comments[item.id]}</div>
-                                : <p style={{ fontSize: 12, color: '#3A3A40', fontStyle: 'italic' }}>Sin notas aún.</p>
-                              }
-                              <button className="pill-btn" style={{ marginTop: 8 }} onClick={(e) => startEdit(item.id, e)}>
-                                {comments[item.id] ? 'Editar nota' : '+ Agregar nota'}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                            ) : (
+                              <div>
+                                {comments[item.id]
+                                  ? <div className="comment-text">{comments[item.id]}</div>
+                                  : <p style={{ fontSize: 12, color: '#3A3A40', fontStyle: 'italic' }}>Sin notas aún.</p>
+                                }
+                                <button className="pill-btn" style={{ marginTop: 8 }} onClick={(e) => startEdit(item.id, e)}>
+                                  {comments[item.id] ? 'Editar nota' : '+ Agregar nota'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })
+          })()}
 
           {pct === 100 && total > 0 && (
             <div style={{ textAlign: 'center', padding: '32px 16px' }}>
