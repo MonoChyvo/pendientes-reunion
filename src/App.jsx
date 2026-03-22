@@ -116,7 +116,18 @@ export default function App() {
     })
     const unsub4 = onValue(ref(db, 'items'), s => {
       const data = s.val() || {}
-      setItems(Object.values(data))
+      const SECTION_ORDER = ['operaciones', 'finanzas', 'tecnologia', 'marketing', 'insumos']
+      const sorted = Object.values(data).sort((a, b) => {
+        const sectionDiff = SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section)
+        if (sectionDiff !== 0) return sectionDiff
+        const aIsOriginal = !a.id.startsWith('item_')
+        const bIsOriginal = !b.id.startsWith('item_')
+        if (aIsOriginal && !bIsOriginal) return -1
+        if (!aIsOriginal && bIsOriginal) return 1
+        return (b.createdAt || 0) - (a.createdAt || 0)
+      })
+      setItems(sorted)
+      console.log('items ordenados:', sorted.map(i => i.id + ' - ' + i.section))
       checkLoaded()
     })
 
@@ -162,6 +173,7 @@ export default function App() {
     delete next[id]
     setArchived(next)
     await set(ref(db, 'pendientes/archived'), next)
+    await set(ref(db, `items/${id}`), null)
   }
 
   const restoreItem = async (id) => {
@@ -326,96 +338,100 @@ export default function App() {
               return acc
             }, {})
 
-            return Object.entries(grouped).map(([sectionKey, sectionItems]) => {
-              const meta = SECTION_META[sectionKey] || { label: sectionKey, color: '#9090A0', bg: 'rgba(144,144,160,0.12)' }
+            const SECTION_ORDER = ['operaciones', 'finanzas', 'tecnologia', 'marketing', 'insumos']
+            return Object.entries(grouped)
+              .sort(([a], [b]) => SECTION_ORDER.indexOf(a) - SECTION_ORDER.indexOf(b))
+              .map(([sectionKey, sectionItems]) => {
+                const meta = SECTION_META[sectionKey] || { label: sectionKey, color: '#9090A0', bg: 'rgba(144,144,160,0.12)' }
 
-              let visibleItems = sectionItems.filter(i => !archived[i.id])
-              if (activeFilter === 'urgent') visibleItems = visibleItems.filter(i => i.urgent)
-              if (activeFilter === 'pending') visibleItems = visibleItems.filter(i => !checked[i.id])
-              if (visibleItems.length === 0) return null
+                let visibleItems = sectionItems.filter(i => !archived[i.id])
+                console.log(sectionKey, visibleItems.map(i => i.id))
+                if (activeFilter === 'urgent') visibleItems = visibleItems.filter(i => i.urgent)
+                if (activeFilter === 'pending') visibleItems = visibleItems.filter(i => !checked[i.id])
+                if (visibleItems.length === 0) return null
 
-              const secDone = sectionItems.filter(i => checked[i.id] && !archived[i.id]).length
-              const secTotal = sectionItems.filter(i => !archived[i.id]).length
+                const secDone = sectionItems.filter(i => checked[i.id] && !archived[i.id]).length
+                const secTotal = sectionItems.filter(i => !archived[i.id]).length
 
-              return (
-                <div key={sectionKey} className="section-card">
-                  <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid #1E1E24', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                      {meta.label}
-                    </span>
-                    <span style={{ fontSize: 12, color: '#3A3A40' }}>{secDone}/{secTotal}</span>
-                  </div>
-                  <div style={{ padding: '4px 0' }}>
-                    {visibleItems.map(item => (
-                      <div key={item.id}>
-                        <div className={`item-row ${checked[item.id] ? 'done' : ''}`} onClick={() => toggleExpand(item.id)}>
-                          <div className="check-circle" onClick={(e) => toggleCheck(item.id, e)}>
-                            <svg className="check-svg" width="10" height="8" viewBox="0 0 10 8" fill="none">
-                              <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              <span className="item-text" style={{ fontSize: 13, fontWeight: 500, color: '#D0D0D8', lineHeight: 1.4 }}>{item.text}</span>
-                              {item.urgent && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.15)', color: '#F87171', fontWeight: 600 }}>URGENTE</span>}
-                              {comments[item.id] && <span style={{ fontSize: 10, color: '#4A4A52' }}>💬</span>}
+                return (
+                  <div key={sectionKey} className="section-card">
+                    <div style={{ padding: '11px 16px 9px', borderBottom: '1px solid #1E1E24', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: meta.bg, color: meta.color, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                        {meta.label}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#3A3A40' }}>{secDone}/{secTotal}</span>
+                    </div>
+                    <div style={{ padding: '4px 0' }}>
+                      {visibleItems.map(item => (
+                        <div key={item.id}>
+                          <div className={`item-row ${checked[item.id] ? 'done' : ''}`} onClick={() => toggleExpand(item.id)}>
+                            <div className="check-circle" onClick={(e) => toggleCheck(item.id, e)}>
+                              <svg className="check-svg" width="10" height="8" viewBox="0 0 10 8" fill="none">
+                                <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
                             </div>
-                            {item.note && <p style={{ fontSize: 12, color: '#4A4A52', marginTop: 2, lineHeight: 1.4 }}>{item.note}</p>}
-                            <p style={{ fontSize: 11, color: '#3A3A40', marginTop: 3 }}>
-                              {new Date(item.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </p>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span className="item-text" style={{ fontSize: 13, fontWeight: 500, color: '#D0D0D8', lineHeight: 1.4 }}>{item.text}</span>
+                                {item.urgent && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.15)', color: '#F87171', fontWeight: 600 }}>URGENTE</span>}
+                                {comments[item.id] && <span style={{ fontSize: 10, color: '#4A4A52' }}>💬</span>}
+                              </div>
+                              {item.note && <p style={{ fontSize: 12, color: '#4A4A52', marginTop: 2, lineHeight: 1.4 }}>{item.note}</p>}
+                              <p style={{ fontSize: 11, color: '#3A3A40', marginTop: 3 }}>
+                                {new Date(item.createdAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </p>
+                            </div>
+                            <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                              <button className="icon-btn" title="Archivar" onClick={(e) => archiveItem(item.id, e)}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
+                                </svg>
+                              </button>
+                              <button className="icon-btn" title="Notas" onClick={(e) => { toggleExpand(item.id); startEdit(item.id, e) }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                              </button>
+                              <span style={{ fontSize: 12, color: '#3A3A40', alignSelf: 'center', marginLeft: 2 }}>{expanded[item.id] ? '▲' : '▼'}</span>
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                            <button className="icon-btn" title="Archivar" onClick={(e) => archiveItem(item.id, e)}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" />
-                              </svg>
-                            </button>
-                            <button className="icon-btn" title="Notas" onClick={(e) => { toggleExpand(item.id); startEdit(item.id, e) }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9090A0" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                              </svg>
-                            </button>
-                            <span style={{ fontSize: 12, color: '#3A3A40', alignSelf: 'center', marginLeft: 2 }}>{expanded[item.id] ? '▲' : '▼'}</span>
-                          </div>
-                        </div>
 
-                        {expanded[item.id] && (
-                          <div className="expand-panel">
-                            {editingId === item.id ? (
-                              <div>
-                                <textarea
-                                  ref={textareaRef}
-                                  className="comment-box"
-                                  value={draftText}
-                                  onChange={e => setDraftText(e.target.value)}
-                                  placeholder="Agrega notas, acuerdos, contexto..."
-                                  rows={3}
-                                />
-                                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                  <button className="pill-btn save" onClick={() => saveComment(item.id)}>Guardar</button>
-                                  <button className="pill-btn" onClick={() => setEditingId(null)}>Cancelar</button>
+                          {expanded[item.id] && (
+                            <div className="expand-panel">
+                              {editingId === item.id ? (
+                                <div>
+                                  <textarea
+                                    ref={textareaRef}
+                                    className="comment-box"
+                                    value={draftText}
+                                    onChange={e => setDraftText(e.target.value)}
+                                    placeholder="Agrega notas, acuerdos, contexto..."
+                                    rows={3}
+                                  />
+                                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                    <button className="pill-btn save" onClick={() => saveComment(item.id)}>Guardar</button>
+                                    <button className="pill-btn" onClick={() => setEditingId(null)}>Cancelar</button>
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              <div>
-                                {comments[item.id]
-                                  ? <div className="comment-text">{comments[item.id]}</div>
-                                  : <p style={{ fontSize: 12, color: '#3A3A40', fontStyle: 'italic' }}>Sin notas aún.</p>
-                                }
-                                <button className="pill-btn" style={{ marginTop: 8 }} onClick={(e) => startEdit(item.id, e)}>
-                                  {comments[item.id] ? 'Editar nota' : '+ Agregar nota'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                              ) : (
+                                <div>
+                                  {comments[item.id]
+                                    ? <div className="comment-text">{comments[item.id]}</div>
+                                    : <p style={{ fontSize: 12, color: '#3A3A40', fontStyle: 'italic' }}>Sin notas aún.</p>
+                                  }
+                                  <button className="pill-btn" style={{ marginTop: 8 }} onClick={(e) => startEdit(item.id, e)}>
+                                    {comments[item.id] ? 'Editar nota' : '+ Agregar nota'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )
-            })
+                )
+              })
           })()}
 
           {pct === 100 && total > 0 && (
